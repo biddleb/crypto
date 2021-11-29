@@ -1,5 +1,5 @@
 --MFSC on https://remix.ethereum.org/
---MFSC deployed in JavaScript VM environment with ABI 0xd9145CCE52D386f254917e481eB44e9943F39138
+--MFSC deployed in JavaScript VM environment with address 0xd9145CCE52D386f254917e481eB44e9943F39138
 --Never deployed MFSC to Kovan test network
 
 pragma solidity ^0.6.7;
