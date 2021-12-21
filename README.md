@@ -1,2 +1,2 @@
 # crypto
-Small passion projects to learn by doing crypto
+Learn by doing crypto and stuff
