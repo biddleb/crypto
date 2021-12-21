@@ -8,3 +8,6 @@ git add . ## to add all changes to the index; can also specify the file/folder p
 git commit -m "your message here" ## to commit changes
 git push origin [your branch name] ## to push your commit to the remote server
 
+mkdir [folder name] ## not a git comman but helpful for adding folders to a directory/git repo
+mv [filename] [folder or path] ## move a file from one directory to another
+
