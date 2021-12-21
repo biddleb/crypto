@@ -1,0 +1,10 @@
+git clone [ssh string copied from repo] --to clone a new repo
+git reset --hard origin ## to revert back to the master branch on the remote server and abandon all local changes
+git checkout master ## to checkout the master/main branch from the remote server
+git pull ## to make sure the local branch is in sync with the remote branch
+git checkout -b [branch name] ## to create a local, named branch prior to making changes
+git status ## to compare your local branch to the remote branch and confirm what changes you have made
+git add . ## to add all changes to the index; can also specify the file/folder path to add
+git commit -m "your message here" ## to commit changes
+git push origin [your branch name] ## to push your commit to the remote server
+
