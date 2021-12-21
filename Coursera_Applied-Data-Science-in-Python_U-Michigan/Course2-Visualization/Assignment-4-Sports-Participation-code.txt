@@ -1,0 +1,154 @@
+#HIGH SCHOOL DATA PREP
+import pandas as pd
+import numpy as np
+
+
+df_hs = pd.DataFrame()
+df_hs= pd.read_excel('Excel CivRts data on VA school sports.xlsx')
+df=pd.DataFrame()
+#print(df_hs).head()
+df[['ID','Category','Yes/No','Male','Female','Total Participants','Total Enrollment']
+  ] = df_hs[['ID','Category','Yes/No','Male','Female','Total Participants','Total Enrollment']]
+df1 = pd.pivot_table(df, index='ID', columns='Category', values="Total Enrollment")
+df1 = df1.drop(['Has interscholastic athletics','Participants on single-sex teams','Single-sex sports',
+                'Single-sex teams'],axis=1)
+df1['ID'] = df1.index
+df2 = pd.merge(df,df1,on='ID')
+df2 = df2[df2.Category == 'Participants on single-sex teams'].drop(['Category','Yes/No','Total Participants', 'Total Enrollment'], axis=1)
+df2=df2.rename(columns = {'Male':'Male_Participants', 'Female':'Female_Participants',
+                         'Total Enrollment (Secondary Schools)-female':'Females_Enrolled',
+                         'Total Enrollment (Secondary Schools)-male':'Males_Enrolled'})
+df2=df2[df2.Male_Participants != 0]
+df2=df2[df2.Male_Participants < df2.Males_Enrolled]
+df2=df2[df2.Female_Participants < df2.Females_Enrolled]
+df2['Male_Pct'] = df2.Male_Participants/df2.Males_Enrolled
+df2['Female_Pct'] = df2.Female_Participants/df2.Females_Enrolled
+#df2 =df2.style.format({'Male_Pct': '{:,.2%}'.format,})
+df2["Size"]=df2.Females_Enrolled + df2.Males_Enrolled
+df2['Category'] = 'Medium'
+df2.Category.ix[df2.Size < 650] = "Small"
+df2.Category.ix[df2.Size > 1701] = "Large"
+df_sm = df2.where(df2.Category == 'Small')
+df2.loc['Sm_Mean'] = df_sm.mean()
+df2.loc['Sm_Std'] = df_sm.std()
+df2.loc['Sm_Count'] = df_sm.count()
+df_med = df2.where(df2.Category == 'Medium')
+df2.loc['Med_Mean'] = df_med.mean()
+df2.loc['Med_Std'] = df_med.std()
+df2.loc['Med_Count'] = df_med.count()
+df_lg = df2.where(df2.Category == 'Large')
+df2.loc['Lg_Mean'] = df_lg.mean()
+df2.loc['Lg_Std'] = df_lg.std()
+df2.loc['Lg_Count'] = df_lg.count()
+
+#COLLEGE DATA PREP
+df_coll = pd.DataFrame()
+df_coll = pd.read_csv(
+    "College_Athletics_Participation_All_Sports_and_Men's_Women's_and_Coed_Teams_2013.csv")
+df_va = df_coll[df_coll["State CD"] == 'VA']
+cols_tokeep =['UNITID','Male Undergraduates','Female Undergraduates',
+              "Unduplicated Count Men's Participation","Unduplicated Count Women's Participation"]
+df_va = df_va[cols_tokeep]
+df_va.rename(columns={'Male Undergraduates':'Males_Enrolled','Female Undergraduates':'Females_Enrolled',
+        "Unduplicated Count Men's Participation":'Male_Participants',
+                      "Unduplicated Count Women's Participation":'Female_Participants'}, inplace=True)
+
+df_va=df_va[df_va.Male_Participants < df_va.Males_Enrolled]
+df_va=df_va[df_va.Female_Participants < df_va.Females_Enrolled]
+df_va['Male_Pct'] = df_va.Male_Participants/df_va.Males_Enrolled
+df_va['Female_Pct'] = df_va.Female_Participants/df_va.Females_Enrolled
+df_va["Size"]=df_va.Females_Enrolled + df_va.Males_Enrolled
+df_va['Category'] = 'Medium'
+df_va.Category.ix[df_va.Size < 1200] = "Small"
+df_va.Category.ix[df_va.Size > 5000] = "Large"
+df_va_sm = df_va.where(df_va.Category == 'Small')
+df_va.loc['Sm_Mean'] = df_va_sm.mean()
+df_va.loc['Sm_Std'] = df_va_sm.std()
+df_va.loc['Sm_Count'] = df_va_sm.count()
+df_va_med = df_va.where(df_va.Category == 'Medium')
+df_va.loc['Med_Mean'] = df_va_med.mean()
+df_va.loc['Med_Std'] = df_va_med.std()
+df_va.loc['Med_Count'] = df_va_med.count()
+df_va_lg = df_va.where(df_va.Category == 'Large')
+df_va.loc['Lg_Mean'] = df_va_lg.mean()
+df_va.loc['Lg_Std'] = df_va_lg.std()
+df_va.loc['Lg_Count'] = df_va_lg.count()
+#df_va.describe()
+
+#PLOTTING
+import matplotlib.pyplot as plt
+%matplotlib notebook
+
+plt.figure(figsize=(6,6))
+plt.subplot(2, 1, 1)
+male_pcts = [df2.loc['Sm_Mean','Male_Pct'],df2.loc['Med_Mean','Male_Pct'],df2.loc['Lg_Mean','Male_Pct']]
+male_stds = [df2.loc['Sm_Std','Male_Pct'],df2.loc['Med_Std','Male_Pct'],df2.loc['Lg_Std','Male_Pct']]
+plt.bar([1,2,3], width=0.2, align='edge', height = male_pcts, capsize=5, 
+        tick_label=['Small HS','Med HS','Large HS'], color='blue')
+female_pcts = [df2.loc['Sm_Mean','Female_Pct'],df2.loc['Med_Mean','Female_Pct'],df2.loc['Lg_Mean','Female_Pct']]
+female_stds = [df2.loc['Sm_Std','Female_Pct'],df2.loc['Med_Std','Female_Pct'],df2.loc['Lg_Std','Female_Pct']]
+plt.bar([1,2,3], width=-0.2, align='edge', height = female_pcts, capsize=5, 
+        tick_label=['Small HS\n (Enrollment < 650 )','Med HS','Large HS\n (Enrollment > 1700)'], color='red')
+ax=plt.gca()
+ax.set_title('Percent of Virginia HS Students on Sports Teams in 2013\n',
+           fontweight='bold', fontsize=11)
+ax.set_ylim(0,.7)
+ax.legend(['Male','Female'])
+ax.annotate('318 Virginia High Schools (data from https://ocrdata.ed.gov)',xy=(0.5,.925),
+            ha='center',xycoords='figure fraction',fontsize=10,fontstyle='italic')
+rects = ax.patches
+
+label_f=[' '+str(female_pcts[i]*100)[0:2]+'%' for i in range(3)]
+label_m=[' '+str(male_pcts[i]*100)[0:2]+'%' for i in range(3)]
+
+for i in range(len(male_pcts)):
+    y_m = rects[i].get_height()
+    x_m=rects[i].get_x() #+ rects[i+1].get_width()/2
+    ax.text(x_m, y_m+.01, label_m[i], fontsize=8)
+for i in range(3,6):
+    y_f = rects[i].get_height()
+    x_f=rects[i].get_x() #+ rects[i].get_width()/2
+    ax.text(x_f, y_f+.01, label_f[i-3],fontsize=8)
+#ax.spines['top'].set_visible(False)
+#ax.spines['right'].set_visible(False)
+#ax.spines['left'].set_visible(False)
+ax.yaxis.set_visible(False)
+
+    
+plt.subplot(2, 1, 2)
+male_pcts = [df_va.loc['Sm_Mean','Male_Pct'],df_va.loc['Med_Mean','Male_Pct'],df_va.loc['Lg_Mean','Male_Pct']]
+male_stds = [df_va.loc['Sm_Std','Male_Pct'],df_va.loc['Med_Std','Male_Pct'],df_va.loc['Lg_Std','Male_Pct']]
+plt.bar([1,2,3], width=0.2, align='edge', height = male_pcts, capsize=5, 
+        tick_label=['Small HS','Med HS','Large HS'], color='blue')
+female_pcts = [df_va.loc['Sm_Mean','Female_Pct'],df_va.loc['Med_Mean','Female_Pct'],df_va.loc['Lg_Mean','Female_Pct']]
+female_stds = [df_va.loc['Sm_Std','Female_Pct'],df_va.loc['Med_Std','Female_Pct'],df_va.loc['Lg_Std','Female_Pct']]
+plt.bar([1,2,3], width=-0.2, align='edge', height = female_pcts, capsize=5, 
+        tick_label=['Small Inst\n (Enrollment < 1200 )','Med Inst',
+                    'Large Inst\n (Enrollment > 5000)'], color='red')
+ax=plt.gca()
+ax.set_title('Percent of Virginia College Students on Sports Teams in 2013\n',
+            fontweight='bold',fontsize=11)
+ax.annotate('47 Virginia Colleges (data from https://ope.ed.gov/athletics/#/)',xy=(0.5,.435),
+            ha='center',xycoords='figure fraction',fontsize=10,fontstyle='italic')
+ax.set_ylim(0,.7)
+rects = ax.patches
+
+label_f=[' '+str(female_pcts[i]*100)[0:2]+'%' for i in range(3)]
+label_m=[' '+str(male_pcts[i]*100)[0:2]+'%' for i in range(3)]
+
+for i in range(len(male_pcts)):
+    y_m = rects[i].get_height()
+    x_m=rects[i].get_x() #+ rects[i+1].get_width()/2
+    ax.text(x_m, y_m+.01, label_m[i], fontsize=8)
+for i in range(3,6):
+    y_f = rects[i].get_height()
+    x_f=rects[i].get_x() #+ rects[i].get_width()/2
+    ax.text(x_f, y_f+.01, label_f[i-3],fontsize=8)
+#ax.spines['top'].set_visible(False)
+#ax.spines['right'].set_visible(False)
+#ax.spines['left'].set_visible(False)
+ax.yaxis.set_visible(False)
+ax.legend(['Male','Female'])
+
+   
+plt.tight_layout()
