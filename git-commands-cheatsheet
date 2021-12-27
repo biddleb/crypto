@@ -1,13 +1,21 @@
-git clone [ssh string copied from repo] --to clone a new repo
+git clone [ssh string copied from repo] ## to clone a new repo
+git init ## adds the .git file to a local directory, turning it into a git repo
 git reset --hard origin ## to revert back to the master branch on the remote server and abandon all local changes
 git checkout master ## to checkout the master/main branch from the remote server
 git pull ## to make sure the local branch is in sync with the remote branch
 git checkout -b [branch name] ## to create a local, named branch prior to making changes
 git status ## to compare your local branch to the remote branch and confirm what changes you have made
-git add . ## to add all changes to the index; can also specify the file/folder path to add
+git add . ## to add all changes to the index; can also specify the file/folder path to add; this "stages" the files for a commit
+git remote add origin YOUR_GITHUB_URL_ENDING_IN.git  ## to switch remote/origin repos for pushing and pulling commits
 git commit -m "your message here" ## to commit changes
 git push origin [your branch name] ## to push your commit to the remote server
+git shortlog -sn --all --no-merges ## summary of who has committed how much to your repo
+git blame -L5,10 [filename].[filetype]  ## returns who last changed those line of that file
+git diff --word-diff ## display changed words/strings rather than entire lines
+git log --all --since='2 weeks' --oneline --no-merges  ## all the changes committed over the past 2 weeks; using --author=<email address> will return changes committed by a specific user
 
+
+echo "some text here" >> [filename].[filetype] ## inserts the text inside the paranthesis into the specified file
 mkdir [folder name] ## not a git comman but helpful for adding folders to a directory/git repo
 mv [filename] [folder or path] ## move a file from one directory to another
 
