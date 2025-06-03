@@ -15,7 +15,7 @@ import concurrent.futures
 import threading
 
 ############################
-# SCRIPT CONFIGURATION
+# CONFIGURATION
 ############################
 
 # Toggle to False to exit loop after first quote
@@ -23,7 +23,7 @@ TOGGLE = True
 
 # File and directory configuration
 SAVE_DIR = "/Users/biddzalot/Documents/uniswap_quotes/"
-FILE_VERSION = "v3_uniswap_eth_only" # Updated file version
+FILE_VERSION = "v1" # Updated file version
 LOG_DIR = "/Users/biddzalot/Documents/uniswap_quotes/logs"
 
 # Trading configuration
@@ -37,7 +37,7 @@ INTERFACE_FEE_PCT = 0.0025  # Uniswap interface fee (0.25%)
 INFURA_URL_TEMPLATE = "https://mainnet.infura.io/v3/{}"
 
 # Performance configuration
-MAX_WORKERS_ETHEREUM = 4 # Renamed to MAX_WORKERS later if only one network type
+MAX_WORKERS_ETHEREUM = 4 
 ENABLE_PARALLEL_PROCESSING = True
 
 # ETH price cache configuration
@@ -50,10 +50,6 @@ SLIPPAGE_TOLERANCE_BY_TOKEN = {
    'default': 0.10   # 10% for everything else
 }
 
-############################
-# SETUP AND INITIALIZATION
-############################
-
 # Generate timestamped filenames
 current_date = dt.datetime.now().strftime("%Y%m%d")
 csv_filename = f"uniswap_quotes_{FILE_VERSION}_{current_date}.csv"
@@ -64,9 +60,9 @@ log_file = os.path.join(LOG_DIR, f"uniswap_quotes_{FILE_VERSION}_{current_date}.
 os.makedirs(SAVE_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
-############################
-# LOGGING CONFIGURATION
-############################
+##################
+# LOGGING
+##################
 
 # Create logger with rotating file handler
 logger = logging.getLogger("uniswap_quotes")
@@ -95,7 +91,7 @@ w3_ethereum = Web3(Web3.HTTPProvider(INFURA_URL))
 # TOKEN CONFIGURATION
 ############################
 
-# Token decimals (consistent across networks) - reduced to relevant tokens
+# Token decimals (consistent across networks)
 TOKEN_DECIMALS = {
    "ETH": 18, "USDC": 6, "USDT": 6, "WBTC": 8, "LINK": 18, "AAVE": 18 # 
 }
@@ -145,9 +141,9 @@ csv_lock = threading.Lock()
 
 def  validate_network_connections ():
    """Validate connections to all configured networks"""
-   for network_key, network_info in NETWORK_CONFIGS.items(): # Will now only iterate through Ethereum
+   for network_key, network_info in NETWORK_CONFIGS.items():
        try:
-           connected = network_info["w3"].is_connected() # 
+           connected = network_info["w3"].is_connected()
            logger.info(f"{network_info['name']} connection status: {connected}")
            if not connected:
                logger.error(f"Could not connect to {network_info['name']}. Please check your connection.") # 
@@ -156,7 +152,7 @@ def  validate_network_connections ():
            logger.error(f"Error connecting to {network_info['name']}: {e}")
            sys.exit(1)
 
-# Validate connections on startup
+# Validate connections
 validate_network_connections()
 
 ###############################
@@ -171,7 +167,7 @@ def  signal_handler (sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 ############################
-# SMART CONTRACT ABIs
+# SET UP ABIs
 ############################
 
 # Uniswap V3 Factory contract - returns the pool address for a given pair and fee 
@@ -270,7 +266,7 @@ QUOTER_V2_ABI = json.loads("""
 ############################
 
 def  initialize_network_contracts ():
-   """Initialize smart contracts for all configured networks""" # Will now only init Ethereum
+   """Initialize smart contracts for all configured networks"""
    for network_key, config in NETWORK_CONFIGS.items():
        w3_instance = config["w3"]
       
@@ -522,7 +518,7 @@ def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_
            amount_out = None
            gas_estimate = 150000  # Default fallback 
           
-           # Use QuoterV2 if QuoterV1 is not available or if preferred (e.g. Ethereum can use V2 as well)
+           # Use QuoterV2 if QuoterV1 is not available (e.g. on Base))
            if quoter_v2_available and (not quoter_available or network == "base"): # network == "base" part is now moot
                # Create the path for QuoterV2
                fee_hex = current_fee_tier.to_bytes(3, byteorder='big').hex()
@@ -536,7 +532,7 @@ def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_
                ).call()
                logger.info(f"[{config['name']}] Uniswap: Using QuoterV2 for fee tier {current_fee_tier/10000}% for {token_in_symbol}-{token_out_symbol}")
           
-           # Use QuoterV1 if available (Ethereum)
+           # Use QuoterV1 if available
            elif quoter_available:
                amount_out = quoter_contract.functions.quoteExactInputSingle( # 
                    token_in, token_out, current_fee_tier, amount_in, 0
@@ -559,14 +555,6 @@ def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_
                        pass # Silently fall back to default estimate if QuoterV2 gas fails 
           
            if amount_out is None:
-               # This case should ideally be covered by the quoter_available checks at the start of the function
-               # or if a network might have V2 but not V1 and the logic above prefers V1 path incorrectly.
-               # For Ethereum, it typically has V1, and V2.
-               # If QuoterV1 is not available, code path for V2 should be taken.
-               # If V1 is available but fails, and V2 is also available, it could try V2 here or raise.
-               # Current logic: If V1 is available, it's used. If only V2 is available, it's used.
-               # If V1 is not available AND V2 is not available, it raises an error at the function start.
-               # This exception here implies amount_out wasn't set by either V1 or V2 logic paths successfully.
                logger.error(f"[{config['name']}] Uniswap: Could not get amountOut using available quoters for {token_in_symbol}-{token_out_symbol} at fee {current_fee_tier/10000}%")
                raise Exception("No quoter available or quoter failed to return amount out")
           
@@ -595,7 +583,7 @@ def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_
            eth_price_usd = get_current_eth_price() # 
            gas_cost_usd = gas_cost_eth * eth_price_usd
 
-           chain_id = 1 # Ethereum Mainnet chain ID, was: 1 if network == "ethereum" else 8453
+           chain_id = 1 # Ethereum Mainnet chain ID
 
            return {
                "timestamp": dt.datetime.now(dt.UTC).isoformat(),
@@ -702,11 +690,11 @@ def  main ():
    Main execution function for the Uniswap quotes collector
    """
    start_time = time.time()
-   logger.info("Starting Uniswap (Ethereum) quote collector...") # Updated message
+   logger.info("Starting Uniswap (Ethereum) quote collector...")
    logger.info(f"CSV output file: {CSV_FILE}")
   
    # Log all networks and their trading pairs
-   for network_key, config in NETWORK_CONFIGS.items(): # Will only be Ethereum
+   for network_key, config in NETWORK_CONFIGS.items(): 
        logger.info(f"{config['name']} - Tracking pairs: {', '.join([f'{pair[0]}/{pair[1]}' for pair in config['trade_pairs']])}")
   
    logger.info(f"USD notional amounts: {', '.join([f'${n}' for n in USD_NOTIONALS])}") # 
@@ -716,7 +704,7 @@ def  main ():
            now = dt.datetime.now(dt.UTC).isoformat()
            logger.info(f"[{now}] Starting new quote collection cycle")
           
-           # Iterate over each network (only Ethereum now)
+           # Iterate over each network (preserved for future use)
            for network_key, config in NETWORK_CONFIGS.items():
                logger.info(f"[{now}] Processing {config['name']}...") # 
               
@@ -739,8 +727,7 @@ def  main ():
                        pair_data = (token_a, token_b, config, network_key, cached_gas_price, now)
                        pair_tasks.append(pair_data) # 
                   
-                   # MAX_WORKERS_BASE removed, MAX_WORKERS_ETHEREUM can be renamed or kept
-                   max_workers = MAX_WORKERS_ETHEREUM # (simplified)
+                   max_workers = MAX_WORKERS_ETHEREUM
                    logger.info(f"[{config['name']}] Processing {len(pair_tasks)} trading pairs with {max_workers} parallel workers...")
                   
                    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
