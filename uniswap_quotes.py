@@ -22,9 +22,9 @@ import threading
 TOGGLE = True
 
 # File and directory configuration
-SAVE_DIR = "/Users/biddzalot/Documents/uniswap_quotes/"
+SAVE_DIR = "/Users/{}}/Documents/uniswap_quotes/"
 FILE_VERSION = "v1" # Updated file version
-LOG_DIR = "/Users/biddzalot/Documents/uniswap_quotes/logs"
+LOG_DIR = "/Users/{}}/Documents/uniswap_quotes/logs"
 
 # Trading configuration
 USD_NOTIONALS = [500, 2000, 10000]
@@ -772,4 +772,4 @@ def  main ():
 if __name__ == "__main__":
    main()
 
-# caffeinate python3 /Users/biddzalot/Documents/crypto/uniswap_quotes.py
+# caffeinate python3 /Users/{}}/Documents/crypto/uniswap_quotes.py
