@@ -26,24 +26,24 @@ SAVE_DIR = "/Users/{}}/Documents/uniswap_quotes/"
 FILE_VERSION = "v1" # Updated file version
 LOG_DIR = "/Users/{}}/Documents/uniswap_quotes/logs"
 
-# Trading configuration
+# Quotes configuration (excluding pairs)
 USD_NOTIONALS = [500, 2000, 10000]
 POOL_FEE_TIERS = [100, 500, 3000, 10000]  # 0.01%, 0.05%, 0.3%, 1%
 INTERFACE_FEE_PCT = 0.0025  # Uniswap interface fee (0.25%)
 
-# API configuration (MetaMask specific ones removed)
 
-# Network-specific configuration (Base chain specific ones removed)
-INFURA_URL_TEMPLATE = "https://mainnet.infura.io/v3/{}"
+# Network-specific configuration
+ETHEREUM_URL_TEMPLATE = "https://mainnet.infura.io/v3/{}"
+BASE_URL_TEMPLATE = "https://base-mainnet.infura.io/v3/{}"
 
-# Performance configuration
+# Parallelization
 MAX_WORKERS_ETHEREUM = 4 
 ENABLE_PARALLEL_PROCESSING = True
 
 # ETH price cache configuration
 ETH_PRICE_CACHE_DURATION = 300  # 5 minutes in seconds
 
-# Higher slippage tolerance for certain token pairs
+# Higher slippage tolerance for lower liquidity tokens
 SLIPPAGE_TOLERANCE_BY_TOKEN = {
    'WBTC': 0.05,     # 5%
    'ETH': 0.05,      # 5%
@@ -83,8 +83,8 @@ infura_api_key = os.getenv("INFURA_API_KEY")
 logger.info(f"Infura API key loaded: {bool(infura_api_key)}")
 
 # Initialize Web3 connections
-INFURA_URL = INFURA_URL_TEMPLATE.format(infura_api_key)
-w3_ethereum = Web3(Web3.HTTPProvider(INFURA_URL))
+ETHEREUM_URL = ETHEREUM_URL_TEMPLATE.format(infura_api_key)
+w3_ethereum = Web3(Web3.HTTPProvider(ETHEREUM_URL))
 # w3_base removed
 
 ############################
