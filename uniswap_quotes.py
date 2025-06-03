@@ -13,119 +13,46 @@ import logging
 from logging.handlers import RotatingFileHandler
 import concurrent.futures
 import threading
-from functools import wraps
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
-#--------------------------------
-# RETRY AND RATE LIMITING CONFIGURATION
-#--------------------------------
-
-# Rate limiting configuration
-RATE_LIMIT_CALLS = 50  # Number of calls allowed per window
-RATE_LIMIT_WINDOW = 60  # Time window in seconds
-rate_limit_lock = threading.Lock()
-rate_limit_calls = []
-rate_limit_semaphore = threading.Semaphore(RATE_LIMIT_CALLS)
-
-def rate_limit(func):
-    """Decorator to implement rate limiting for API calls"""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        with rate_limit_lock:
-            current_time = time.time()
-            # Remove calls outside the current window
-            rate_limit_calls[:] = [call_time for call_time in rate_limit_calls 
-                                 if current_time - call_time < RATE_LIMIT_WINDOW]
-            
-            if len(rate_limit_calls) >= RATE_LIMIT_CALLS:
-                # Calculate sleep time until oldest call expires
-                sleep_time = rate_limit_calls[0] + RATE_LIMIT_WINDOW - current_time
-                if sleep_time > 0:
-                    logger.info(f"Rate limit reached, sleeping for {sleep_time:.2f} seconds")
-                    time.sleep(sleep_time)
-            
-            # Add current call to the list
-            rate_limit_calls.append(current_time)
-        
-        return func(*args, **kwargs)
-    return wrapper
-
-# Retry configuration
-MAX_RETRIES = 3
-RETRY_BACKOFF_FACTOR = 0.5
-RETRY_STATUS_FORCELIST = [500, 502, 503, 504]
-
-# Create a session with retry strategy
-session = requests.Session()
-retry_strategy = Retry(
-    total=MAX_RETRIES,
-    backoff_factor=RETRY_BACKOFF_FACTOR,
-    status_forcelist=RETRY_STATUS_FORCELIST,
-)
-adapter = HTTPAdapter(max_retries=retry_strategy)
-session.mount("http://", adapter)
-session.mount("https://", adapter)
-
-def with_retry(max_retries=MAX_RETRIES, backoff_factor=RETRY_BACKOFF_FACTOR):
-    """Decorator to implement retry logic for functions"""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exception = None
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    if attempt < max_retries - 1:
-                        sleep_time = backoff_factor * (2 ** attempt)
-                        logger.warning(f"Attempt {attempt + 1} failed: {str(e)}. Retrying in {sleep_time:.2f} seconds...")
-                        time.sleep(sleep_time)
-                    else:
-                        logger.error(f"All {max_retries} attempts failed. Last error: {str(e)}")
-                        raise last_exception
-            return None
-        return wrapper
-    return decorator
-
-#--------------------------------
+############################
 # SCRIPT CONFIGURATION
-#--------------------------------
+############################
 
-# Toggle to False to exit loop after one quote
+# Toggle to False to exit loop after first quote
 TOGGLE = True
 
 # File and directory configuration
-SAVE_DIR = os.getenv("QUOTES_SAVE_DIR", "/Users/bbiddle/Documents/quotes/")
-FILE_VERSION = os.getenv("QUOTES_FILE_VERSION", "v1")
-LOG_DIR = os.getenv("QUOTES_LOG_DIR", "/Users/bbiddle/Documents/quotes/logs")
+SAVE_DIR = "/Users/biddzalot/Documents/uniswap_quotes/"
+FILE_VERSION = "v3_uniswap_eth_only" # Updated file version
+LOG_DIR = "/Users/biddzalot/Documents/uniswap_quotes/logs"
 
 # Trading configuration
 USD_NOTIONALS = [500, 2000, 10000]
 POOL_FEE_TIERS = [100, 500, 3000, 10000]  # 0.01%, 0.05%, 0.3%, 1%
 INTERFACE_FEE_PCT = 0.0025  # Uniswap interface fee (0.25%)
 
-# Network-specific configuration
-INFURA_URL_TEMPLATE = os.getenv("INFURA_URL_TEMPLATE", "https://mainnet.infura.io/v3/{}")
+# API configuration (MetaMask specific ones removed)
+
+# Network-specific configuration (Base chain specific ones removed)
+INFURA_URL_TEMPLATE = "https://mainnet.infura.io/v3/{}"
 
 # Performance configuration
-MAX_WORKERS_ETHEREUM = int(os.getenv("MAX_WORKERS_ETHEREUM", "4"))
-ENABLE_PARALLEL_PROCESSING = os.getenv("ENABLE_PARALLEL_PROCESSING", "true").lower() == "true"
+MAX_WORKERS_ETHEREUM = 4 # Renamed to MAX_WORKERS later if only one network type
+ENABLE_PARALLEL_PROCESSING = True
 
 # ETH price cache configuration
-ETH_PRICE_CACHE_DURATION = int(os.getenv("ETH_PRICE_CACHE_DURATION", "300"))  # 5 minutes in seconds
+ETH_PRICE_CACHE_DURATION = 300  # 5 minutes in seconds
 
 # Higher slippage tolerance for certain token pairs
 SLIPPAGE_TOLERANCE_BY_TOKEN = {
-    'WBTC': float(os.getenv("SLIPPAGE_TOLERANCE_WBTC", "0.05")),     # 5% - Should have good liquidity but allow some slippage
-    'ETH': float(os.getenv("SLIPPAGE_TOLERANCE_ETH", "0.05")),      # 5% - Major asset but allow some slippage
-    'default': float(os.getenv("SLIPPAGE_TOLERANCE_DEFAULT", "0.10"))   # 10% for everything else
+   'WBTC': 0.05,     # 5%
+   'ETH': 0.05,      # 5%
+   'default': 0.10   # 10% for everything else
 }
 
-#--------------------------------
+############################
 # SETUP AND INITIALIZATION
-#--------------------------------
+############################
 
 # Generate timestamped filenames
 current_date = dt.datetime.now().strftime("%Y%m%d")
@@ -137,9 +64,9 @@ log_file = os.path.join(LOG_DIR, f"uniswap_quotes_{FILE_VERSION}_{current_date}.
 os.makedirs(SAVE_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
-#--------------------------------
+############################
 # LOGGING CONFIGURATION
-#--------------------------------
+############################
 
 # Create logger with rotating file handler
 logger = logging.getLogger("uniswap_quotes")
@@ -150,9 +77,9 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-#--------------------------------
+############################
 # ENVIRONMENT AND WEB3 SETUP
-#--------------------------------
+############################
 
 # Load environment variables
 load_dotenv(dotenv_path="../.env")
@@ -162,19 +89,20 @@ logger.info(f"Infura API key loaded: {bool(infura_api_key)}")
 # Initialize Web3 connections
 INFURA_URL = INFURA_URL_TEMPLATE.format(infura_api_key)
 w3_ethereum = Web3(Web3.HTTPProvider(INFURA_URL))
+# w3_base removed
 
-#--------------------------------
+############################
 # TOKEN CONFIGURATION
-#--------------------------------
+############################
 
 # Token decimals (consistent across networks) - reduced to relevant tokens
 TOKEN_DECIMALS = {
    "ETH": 18, "USDC": 6, "USDT": 6, "WBTC": 8, "LINK": 18, "AAVE": 18 # 
 }
 
-#--------------------------------
+############################
 # NETWORK CONFIGURATIONS
-#--------------------------------
+############################
 
 NETWORK_CONFIGS = {
    "ethereum": {
@@ -201,52 +129,50 @@ NETWORK_CONFIGS = {
    # "base" network configuration removed 
 }
 
-#--------------------------------
+############################
 # GLOBAL STATE
-#--------------------------------
+############################
 
 # ETH price cache to avoid excessive API calls
 eth_price_cache = {"price": None, "timestamp": None, "cache_duration": ETH_PRICE_CACHE_DURATION}
-eth_price_lock = threading.Lock()  # Add lock for thread safety
 
 # Thread-safe CSV writing
 csv_lock = threading.Lock()
 
-#--------------------------------
+################################
 # NETWORK CONNECTION VALIDATION
-#--------------------------------
+################################
 
-@with_retry()
-def validate_network_connections():
-    """Validate connections to all configured networks"""
-    for network_key, network_info in NETWORK_CONFIGS.items():
-        try:
-            connected = network_info["w3"].is_connected()
-            logger.info(f"{network_info['name']} connection status: {connected}")
-            if not connected:
-                logger.error(f"Could not connect to {network_info['name']}. Please check your connection.")
-                sys.exit(1)
-        except Exception as e:
-            logger.error(f"Error connecting to {network_info['name']}: {e}")
-            sys.exit(1)
+def  validate_network_connections ():
+   """Validate connections to all configured networks"""
+   for network_key, network_info in NETWORK_CONFIGS.items(): # Will now only iterate through Ethereum
+       try:
+           connected = network_info["w3"].is_connected() # 
+           logger.info(f"{network_info['name']} connection status: {connected}")
+           if not connected:
+               logger.error(f"Could not connect to {network_info['name']}. Please check your connection.") # 
+               sys.exit(1)
+       except Exception as e:
+           logger.error(f"Error connecting to {network_info['name']}: {e}")
+           sys.exit(1)
 
 # Validate connections on startup
 validate_network_connections()
 
-#--------------------------------
+###############################
 # SIGNAL HANDLERS FOR SHUTDOWN
-#--------------------------------
+###############################
 
-def signal_handler(sig, frame):
-    """Handle graceful shutdown on interrupt"""
-    logger.info("Shutting down quote collector...")
-    sys.exit(0)
+def  signal_handler (sig, frame):
+   """Handle graceful shutdown on interrupt"""
+   logger.info("Shutting down quote collector...")
+   sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
 
-#--------------------------------
+############################
 # SMART CONTRACT ABIs
-#--------------------------------
+############################
 
 # Uniswap V3 Factory contract - returns the pool address for a given pair and fee 
 FACTORY_ABI = json.loads("""
@@ -339,95 +265,88 @@ QUOTER_V2_ABI = json.loads("""
 ]
 """)
 
-#--------------------------------
+############################
 # CONTRACT INITIALIZATION
-#--------------------------------
+############################
 
-@with_retry()
-def initialize_network_contracts():
-    """Initialize smart contracts for all configured networks"""
-    for network_key, config in NETWORK_CONFIGS.items():
-        w3_instance = config["w3"]
-        
-        # Factory contract
-        factory_address = w3_instance.to_checksum_address(config["factory_address"])
-        config["factory"] = w3_instance.eth.contract(address=factory_address, abi=FACTORY_ABI)
-        
-        # Quoter contract (only if address exists)
-        if config["quoter_address"]:
-            quoter_address = w3_instance.to_checksum_address(config["quoter_address"])
-            config["quoter"] = w3_instance.eth.contract(address=quoter_address, abi=QUOTER_ABI)
-            config["quoter_available"] = True
-        else:
-            config["quoter"] = None
-            config["quoter_available"] = False
-            logger.info(f"QuoterV1 not available for {config['name']} (using QuoterV2 only)")
-        
-        # QuoterV2 contract (with error handling)
-        try:
-            quoter_v2_address = w3_instance.to_checksum_address(config["quoter_v2_address"])
-            config["quoter_v2"] = w3_instance.eth.contract(address=quoter_v2_address, abi=QUOTER_V2_ABI)
-            config["quoter_v2_available"] = True
-            logger.info(f"QuoterV2 contract initialized successfully for {config['name']}")
-        except Exception as e:
-            config["quoter_v2_available"] = False
-            logger.warning(f"Warning: QuoterV2 contract not available for {config['name']}: {e}")
+def  initialize_network_contracts ():
+   """Initialize smart contracts for all configured networks""" # Will now only init Ethereum
+   for network_key, config in NETWORK_CONFIGS.items():
+       w3_instance = config["w3"]
+      
+       # Factory contract
+       factory_address = w3_instance.to_checksum_address(config["factory_address"])
+       config["factory"] = w3_instance.eth.contract(address=factory_address, abi=FACTORY_ABI)
+      
+       # Quoter contract (only if address exists)
+       if config["quoter_address"]:
+           quoter_address = w3_instance.to_checksum_address(config["quoter_address"])
+           config["quoter"] = w3_instance.eth.contract(address=quoter_address, abi=QUOTER_ABI) # 
+           config["quoter_available"] = True
+       else:
+           config["quoter"] = None
+           config["quoter_available"] = False
+           logger.info(f"QuoterV1 not available for {config['name']} (using QuoterV2 only)")
+      
+       # QuoterV2 contract (with error handling)
+       try:
+           quoter_v2_address = w3_instance.to_checksum_address(config["quoter_v2_address"]) # 
+           config["quoter_v2"] = w3_instance.eth.contract(address=quoter_v2_address, abi=QUOTER_V2_ABI)
+           config["quoter_v2_available"] = True
+           logger.info(f"QuoterV2 contract initialized successfully for {config['name']}")
+       except Exception as e:
+           config["quoter_v2_available"] = False
+           logger.warning(f"Warning: QuoterV2 contract not available for {config['name']}: {e}")
 
 # Initialize contracts on startup
 initialize_network_contracts()
 
-#--------------------------------
-# UTILITY FUNCTIONS
-#--------------------------------
+############################
+# UTILITY FUNCTIONS # 
+############################
 
-@rate_limit
-@with_retry()
-def get_current_eth_price():
-    """
-    Get current ETH price in USD from CoinGecko API and cache it
-    Thread-safe implementation with retry logic and rate limiting
-    """
-    current_time = time.time()
-    
-    # Check cache with lock
-    with eth_price_lock:
-        if (eth_price_cache["price"] is not None and
-            eth_price_cache["timestamp"] is not None and
-            current_time - eth_price_cache["timestamp"] < eth_price_cache["cache_duration"]):
-            return eth_price_cache["price"]
-    
-    try:
-        # Fetch current ETH price from CoinGecko API
-        response = session.get(
-            "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
-            timeout=10
-        )
-        response.raise_for_status()
-        data = response.json()
-        
-        eth_price = data["ethereum"]["usd"]
-        
-        # Update cache with lock
-        with eth_price_lock:
-            eth_price_cache["price"] = eth_price
-            eth_price_cache["timestamp"] = current_time
-            logger.info(f"Fetched current ETH price: ${eth_price}")
-            return eth_price
-        
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Failed to fetch ETH price from CoinGecko: {e}")
-        
-        # Fallback to cached price if available
-        with eth_price_lock:
-            if eth_price_cache["price"] is not None:
-                logger.info(f"Using cached ETH price: ${eth_price_cache['price']}")
-                return eth_price_cache["price"]
-        
-        # Final fallback to approximate price
-        logger.warning("Using fallback ETH price of $3000")
-        return 3000
+def  get_current_eth_price ():
+   """
+   Get current ETH price in USD from CoinGecko API and cache it
+   """
+   current_time = time.time()
+  
+   # Check if we have a cached price that's still valid
+   if (eth_price_cache["price"] is not None and
+       eth_price_cache["timestamp"] is not None and
+       current_time - eth_price_cache["timestamp"] < eth_price_cache["cache_duration"]):
+       return eth_price_cache["price"]
+  
+   try:
+       # Fetch from CoinGecko API
+       response = requests.get( # 
+           "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
+           timeout=10
+       )
+       response.raise_for_status()
+       data = response.json()
+      
+       eth_price = data["ethereum"]["usd"]
+      
+       # Update cache
+       eth_price_cache["price"] = eth_price
+       eth_price_cache["timestamp"] = current_time
+       logger.info(f"Fetched current ETH price: ${eth_price}") # 
+       return eth_price
+      
+   except Exception as e:
+       logger.warning(f"Failed to fetch ETH price from CoinGecko: {e}")
+      
+       # Fallback to cached price if available
+       if eth_price_cache["price"] is not None:
+           logger.info(f"Using cached ETH price: ${eth_price_cache['price']}")
+           return eth_price_cache["price"] # 
+      
+       # Final fallback to approximate price
+       logger.warning("Using fallback ETH price of $3000")
+       return 3000
 
-def write_quote_row(row):
+def  write_quote_row (row):
    """Write a quote to the CSV file in a thread-safe manner"""
    with csv_lock:
        file_exists = os.path.isfile(CSV_FILE)
@@ -437,10 +356,9 @@ def write_quote_row(row):
                writer.writeheader()
            writer.writerow(row)
 
-def detect_unreasonable_slippage(amount_in_small, amount_out_small, amount_in_large, amount_out_large, token_symbol=None):
+def  detect_unreasonable_slippage (amount_in_small, amount_out_small, amount_in_large, amount_out_large, token_symbol=None):
    """
    Simulate slippage between small and large trades
-   Returns True if slippage suggests insufficient liquidity
    """
    if amount_in_small == 0 or amount_out_small == 0:
        return False # 
@@ -465,56 +383,60 @@ def detect_unreasonable_slippage(amount_in_small, amount_out_small, amount_in_la
   
    return slippage_ratio > max_slippage_ratio
 
-#--------------------------------
+############################
 # UNISWAP FUNCTIONS
-#--------------------------------
+############################
 
-@with_retry()
-def find_best_pool_with_liquidity(token_in, token_out, amount_in, token_in_symbol, network="ethereum"):
-    """
-    Find the pool with the lowest fee tier with sufficient liquidity using slippage-based validation for all trade sizes.
-    """
-    config = NETWORK_CONFIGS[network]
-    w3_instance = config["w3"]
-    factory_contract = config["factory"]
-    
-    decimals_in = TOKEN_DECIMALS[token_in_symbol]
-    
-    logger.info(f"[{config['name']}] Looking for available pools for {token_in_symbol}")
-    
-    # Check all fee tiers from lowest to highest
-    for fee in POOL_FEE_TIERS:
-        try:
-            pool_address = factory_contract.functions.getPool(token_in, token_out, fee).call()
-            if pool_address != "0x0000000000000000000000000000000000000000":
-                logger.info(f"[{config['name']}] Found pool with fee tier {fee/10000}% at {pool_address}")
-                
-                try:
-                    pool_contract = w3_instance.eth.contract(address=pool_address, abi=POOL_ABI)
-                    total_liquidity = pool_contract.functions.liquidity().call()
-                    
-                    if total_liquidity > 0:
-                        logger.info(f"[{config['name']}] Pool has liquidity ({total_liquidity}). Using fee tier {fee/10000}%")
-                        return fee, pool_address
-                    else:
-                        logger.info(f"[{config['name']}] Pool has zero liquidity, trying next fee tier")
-                        continue
-                        
-                except Exception as liquidity_error:
-                    logger.warning(f"[{config['name']}] Could not check liquidity for pool {pool_address}: {liquidity_error}")
-                    logger.info(f"[{config['name']}] Using pool despite liquidity check error. Fee tier {fee/10000}%")
-                    return fee, pool_address
-                    
-        except Exception as e:
-            logger.error(f"[{config['name']}] Error checking pool for fee tier {fee}: {e}")
-    
-    logger.warning(f"[{config['name']}] No pools found for {token_in_symbol} across all fee tiers - skipping pair")
-    return None, None
+def  find_best_pool_with_liquidity (token_in, token_out, amount_in, token_in_symbol, network="ethereum"):
+   """
+   Find the pool with the lowest fee tier that has sufficient liquidity based on slippage check
+   """
+   config = NETWORK_CONFIGS[network]
+   w3_instance = config["w3"]
+   factory_contract = config["factory"]
+  
+   decimals_in = TOKEN_DECIMALS[token_in_symbol]
+   # notional_amount = amount_in / (10 ** decimals_in) # This was for logging only, can be removed if not used
+  
+   logger.info(f"[{config['name']}] Looking for available pools for {token_in_symbol}")
+  
+   # Check all fee tiers from lowest to highest
+   for fee in POOL_FEE_TIERS:
+       try:
+           pool_address = factory_contract.functions.getPool(token_in, token_out, fee).call()
+           if pool_address != "0x0000000000000000000000000000000000000000":
+               logger.info(f"[{config['name']}] Found pool with fee tier {fee/10000}% at {pool_address}") # 
+              
+               # For all trades, do a basic existence check and return the first available pool
+               # The actual slippage validation will happen in get_uniswap_quote()
+               try: # 
+                   pool_contract = w3_instance.eth.contract(address=pool_address, abi=POOL_ABI)
+                   total_liquidity = pool_contract.functions.liquidity().call()
+                  
+                   # Basic sanity check - just ensure liquidity > 0
+                   if total_liquidity > 0: # 
+                       logger.info(f"[{config['name']}] Pool has liquidity ({total_liquidity}). Using fee tier {fee/10000}%") # 
+                       return fee, pool_address
+                   else:
+                       logger.info(f"[{config['name']}] Pool has zero liquidity, trying next fee tier")
+                       continue # 
+                      
+               except Exception as liquidity_error:
+                   logger.warning(f"[{config['name']}] Could not check liquidity for pool {pool_address}: {liquidity_error}")
+                   # If we can't check liquidity, still try this pool
+                   logger.info(f"[{config['name']}] Using pool despite liquidity check error. Fee tier {fee/10000}%") # 
+                   return fee, pool_address
+                  
+       except Exception as e:
+           logger.error(f"[{config['name']}] Error checking pool for fee tier {fee}: {e}")
+  
+   # No pools found across all fee tiers 
+   logger.warning(f"[{config['name']}] No pools found for {token_in_symbol} across all fee tiers - skipping pair")
+   return None, None
 
-def validate_quote_with_slippage_check(token_in, token_out, current_fee_tier, amount_in, amount_out,
+def  validate_quote_with_slippage_check (token_in, token_out, current_fee_tier, amount_in, amount_out,
                                     token_in_symbol, quoter_contract, quoter_available,
-                                    quoter_v2_contract, quoter_v2_available, config): # 
-
+                                    quoter_v2_contract, quoter_v2_available, config): 
    try:
        # Test with 10% of the amount to check for slippage 
        small_amount_in = int(amount_in * 0.1)
@@ -531,26 +453,9 @@ def validate_quote_with_slippage_check(token_in, token_out, current_fee_tier, am
            ).call()
        elif quoter_available:
            # Use QuoterV1 for slippage check
-           amount_out = quoter_contract.functions.quoteExactInputSingle(
-               token_in, token_out, current_fee_tier, amount_in, 0
+           small_amount_out = quoter_contract.functions.quoteExactInputSingle(
+               token_in, token_out, current_fee_tier, small_amount_in, 0
            ).call()
-           logger.info(f"[{config['name']}] Uniswap: Using QuoterV1 for fee tier {current_fee_tier/10000}% for {token_in_symbol}-{token_out_symbol}")
-           
-           # Try to get gas estimate from QuoterV2 if available and QuoterV1 was used for amount_out 
-           if quoter_v2_available and quoter_v2_contract:
-               try:
-                   fee_hex = current_fee_tier.to_bytes(3, byteorder='big').hex()
-                   path = token_in.replace('0x', '') + fee_hex + token_out.replace('0x', '')
-                   path = '0x' + path.lower()
-                   path_bytes = Web3.to_bytes(hexstr=path)
-                   _, _, _, gas_estimate_v2 = quoter_v2_contract.functions.quoteExactInput(
-                       path_bytes, amount_in
-                   ).call()
-                   gas_estimate = gas_estimate_v2  # Update gas estimate if successful
-                   logger.info(f"[{config['name']}] Uniswap: Gas estimate from QuoterV2: {gas_estimate}")
-               except Exception as gas_error:
-                   logger.warning(f"[{config['name']}] Failed to get gas estimate from QuoterV2: {gas_error}. Using default estimate.")
-                   # Keep using the default gas estimate
       
        if small_amount_out:
            # Calculate slippage 
@@ -575,7 +480,7 @@ def validate_quote_with_slippage_check(token_in, token_out, current_fee_tier, am
        # If we can't check slippage, assume the quote is valid and no slippage data
        return True, None
 
-def get_uniswap_quote(token_in_symbol, token_out_symbol, notional_amount, gas_price=None, network="ethereum"): # 
+def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_price=None, network="ethereum"): # 
    """
    Get quote from Uniswap for a given token pair and amount, selecting the best pool
    """
@@ -650,9 +555,8 @@ def get_uniswap_quote(token_in_symbol, token_out_symbol, notional_amount, gas_pr
                        ).call()
                        gas_estimate = gas_estimate_v2 # Update gas estimate if successful
                        logger.info(f"[{config['name']}] Uniswap: Gas estimate from QuoterV2: {gas_estimate}")
-                   except Exception as gas_error:
-                       logger.warning(f"[{config['name']}] Failed to get gas estimate from QuoterV2: {gas_error}. Using default estimate.")
-                       # Keep using the default gas estimate
+                   except Exception:
+                       pass # Silently fall back to default estimate if QuoterV2 gas fails 
           
            if amount_out is None:
                # This case should ideally be covered by the quoter_available checks at the start of the function
@@ -735,11 +639,11 @@ def get_uniswap_quote(token_in_symbol, token_out_symbol, notional_amount, gas_pr
    logger.error(error_msg)
    raise Exception(error_msg) # This will be caught by the calling function
 
-#--------------------------------
+############################
 # DATA PROCESSING FUNCTIONS
-#--------------------------------
+############################
 
-def fetch_uniswap_quote_data(token_a, token_b, notional, cached_gas_price, network_key, config): # 
+def  fetch_uniswap_quote_data (token_a, token_b, notional, cached_gas_price, network_key, config): # 
    """
    Fetch Uniswap quote for a single trading pair and notional amount.
    """
@@ -758,7 +662,7 @@ def fetch_uniswap_quote_data(token_a, token_b, notional, cached_gas_price, netwo
    return uniswap_quote
 
 
-def process_trading_pair(pair_data):
+def  process_trading_pair (pair_data):
    """
    Process a single trading pair with all its notional amounts
    """ # 
@@ -789,102 +693,91 @@ def process_trading_pair(pair_data):
       
        # Base chain delay removed as Base network is removed 
 
-#--------------------------------
+############################
 # MAIN EXECUTION FUNCTIONS
-#--------------------------------
+############################
 
-def main():
+def  main ():
    """
-   Main execution function for the price quotes collector
+   Main execution function for the Uniswap quotes collector
    """
    start_time = time.time()
-   logger.info("Starting Uniswap (Ethereum) quote collector...")
+   logger.info("Starting Uniswap (Ethereum) quote collector...") # Updated message
    logger.info(f"CSV output file: {CSV_FILE}")
-   
-   # Set higher file descriptor limit for concurrent operations
-   try:
-       import resource
-       soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-       resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
-       logger.info(f"Set file descriptor limit to {hard}")
-   except Exception as e:
-       logger.warning(f"Could not set file descriptor limit: {e}")
-   
+  
    # Log all networks and their trading pairs
-   for network_key, config in NETWORK_CONFIGS.items():
+   for network_key, config in NETWORK_CONFIGS.items(): # Will only be Ethereum
        logger.info(f"{config['name']} - Tracking pairs: {', '.join([f'{pair[0]}/{pair[1]}' for pair in config['trade_pairs']])}")
-   
-   logger.info(f"USD notional amounts: {', '.join([f'${n}' for n in USD_NOTIONALS])}")
-   
+  
+   logger.info(f"USD notional amounts: {', '.join([f'${n}' for n in USD_NOTIONALS])}") # 
+  
    try:
        while True:
            now = dt.datetime.now(dt.UTC).isoformat()
            logger.info(f"[{now}] Starting new quote collection cycle")
-           
+          
            # Iterate over each network (only Ethereum now)
            for network_key, config in NETWORK_CONFIGS.items():
-               logger.info(f"[{now}] Processing {config['name']}...")
-               
+               logger.info(f"[{now}] Processing {config['name']}...") # 
+              
                # Cache the gas price once per network per cycle
                try:
                    cached_gas_price = config["w3"].eth.gas_price
-                   logger.info(f"[{config['name']}] Cached gas price for this cycle: {cached_gas_price / 10**9} Gwei")
+                   logger.info(f"[{config['name']}] Cached gas price for this cycle: {cached_gas_price / 10**9} Gwei") # 
                except Exception as e:
                    logger.error(f"[{config['name']}] Error fetching gas price: {e}")
-                   cached_gas_price = None
-               
+                   cached_gas_price = None # Allow trades to proceed with on-demand gas price fetching
+              
+               # ETH price is fetched by get_current_eth_price() which has its own caching 
+               # No need to pass cached_eth_price around for Uniswap only.
+              
                # Process trading pairs for this network
                if ENABLE_PARALLEL_PROCESSING:
-                   pair_tasks = []
+                   pair_tasks = [] # 
                    for token_a, token_b in config["trade_pairs"]:
+                       # cached_eth_price removed from pair_data
                        pair_data = (token_a, token_b, config, network_key, cached_gas_price, now)
-                       pair_tasks.append(pair_data)
-                   
-                   max_workers = MAX_WORKERS_ETHEREUM
+                       pair_tasks.append(pair_data) # 
+                  
+                   # MAX_WORKERS_BASE removed, MAX_WORKERS_ETHEREUM can be renamed or kept
+                   max_workers = MAX_WORKERS_ETHEREUM # (simplified)
                    logger.info(f"[{config['name']}] Processing {len(pair_tasks)} trading pairs with {max_workers} parallel workers...")
-                   
+                  
                    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                       futures = [executor.submit(process_trading_pair, pair_data) for pair_data in pair_tasks]
-                       for future in concurrent.futures.as_completed(futures):
+                       futures = [executor.submit(process_trading_pair, pair_data) for pair_data in pair_tasks] # 
+                       for future in concurrent.futures.as_completed(futures): # 
                            try:
                                future.result()
-                           except Exception as e:
+                           except Exception as e: # 
+                               # Errors from process_trading_pair should be logged there
+                               # This catches errors if process_trading_pair itself fails or re-raises something unexpected.
                                logger.error(f"[{config['name']}] Error processing a trading pair task: {e}")
                else:
-                   logger.info(f"[{config['name']}] Processing trading pairs sequentially...")
+                   logger.info(f"[{config['name']}] Processing trading pairs sequentially...") # 
                    for token_a, token_b in config["trade_pairs"]:
                        pair_data = (token_a, token_b, config, network_key, cached_gas_price, now)
                        process_trading_pair(pair_data)
 
            if not TOGGLE:
-               logger.info("TOGGLE is set to False, terminating script after completing one cycle...")
+               logger.info("TOGGLE is set to False, terminating script after completing one cycle...") # 
                print("TOGGLE is set to False, terminating script after completing one cycle...")
                break
-           
+              
            # Sleep some random interval
-           sleep_time = random.uniform(.25 * 3600, .5 * 3600)
-           logger.info(f"Completed cycle. Sleeping for {sleep_time/3600:.2f} hours until next collection...")
+           sleep_time = random.uniform(.25 * 3600, .5 * 3600) # 
+           logger.info(f"Completed cycle. Sleeping for {sleep_time/3600:.2f} hours until next collection...") # 
            time.sleep(sleep_time)
-           
+          
    except KeyboardInterrupt:
        logger.info("Keyboard interrupt received. Shutting down quote collector...")
    except Exception as e:
-       logger.error(f"Unexpected error in main loop: {e}")
+       logger.error(f"Unexpected error in main loop: {e}") # Ensure this gets logged if it's an unhandled one from deeper
        raise
    finally:
-       # Cleanup Web3 connections
-       for network_key, config in NETWORK_CONFIGS.items():
-           try:
-               if hasattr(config["w3"], "provider"):
-                   config["w3"].provider.close()
-               logger.info(f"Closed Web3 connection for {config['name']}")
-           except Exception as e:
-               logger.warning(f"Error closing Web3 connection for {config['name']}: {e}")
-       
        logger.info("Quote collection completed.")
        end_time = time.time()
        total_time = end_time - start_time
-       hours = int(total_time // 3600)
+       hours = int(total_time // 3600) # 
        minutes = int((total_time % 3600) // 60)
        seconds = int(total_time % 60)
        print(f"Quote collection completed. Total runtime: {hours}h {minutes}m {seconds}s")
