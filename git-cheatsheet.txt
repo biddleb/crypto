@@ -1,3 +1,36 @@
+git clone https://github.com/username/repo-name.git
+cd repo-name
+
+# Create a new branch for your feature
+git checkout -b your-feature-branch
+
+# Pull latest changes from main branch
+git checkout main
+git pull origin main
+
+# Rebase your feature branch onto main
+git checkout your-feature-branch
+git rebase main
+
+# See what's changed
+git status
+
+# Stage all changes
+git add .
+
+# Or stage specific files
+git add path/to/file
+
+# Commit with a message
+git commit -m "Your clear, concise commit message"
+
+# Push your changes to the remote repository
+git push origin your-feature-branch
+
+# Create a pull request
+# Opens a pull request in your browser
+git pr create --base main --head your-feature-branch --title "Your PR title" --body "Optional PR description"
+
 git clone [ssh string copied from repo] ## to clone a new repo
 git init ## adds the .git file to a local directory, turning it into a git repo
 git reset --hard origin ## to revert back to the master branch on the remote server and abandon all local changes
@@ -18,4 +51,3 @@ git log --all --since='2 weeks' --oneline --no-merges  ## all the changes commit
 echo "some text here" >> [filename].[filetype] ## inserts the text inside the paranthesis into the specified file
 mkdir [folder name] ## not a git comman but helpful for adding folders to a directory/git repo
 mv [filename] [folder or path] ## move a file from one directory to another
-

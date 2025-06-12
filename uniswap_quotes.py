@@ -15,16 +15,16 @@ import concurrent.futures
 import threading
 
 ############################
-# CONFIGURATION
+# GLOBAL CONFIG
 ############################
 
 # Toggle to False to exit loop after first quote
 TOGGLE = True
 
 # File and directory configuration
-SAVE_DIR = "/Users/{}}/Documents/uniswap_quotes/"
+SAVE_DIR = "/Users/{}/Documents/uniswap_quotes/"
 FILE_VERSION = "v1" # Updated file version
-LOG_DIR = "/Users/{}}/Documents/uniswap_quotes/logs"
+LOG_DIR = "/Users/{}/Documents/uniswap_quotes/logs"
 
 # Quotes configuration (excluding pairs)
 USD_NOTIONALS = [500, 2000, 10000]
@@ -34,7 +34,6 @@ INTERFACE_FEE_PCT = 0.0025  # Uniswap interface fee (0.25%)
 
 # Network-specific configuration
 ETHEREUM_URL_TEMPLATE = "https://mainnet.infura.io/v3/{}"
-BASE_URL_TEMPLATE = "https://base-mainnet.infura.io/v3/{}"
 
 # Parallelization
 MAX_WORKERS_ETHEREUM = 4 
@@ -74,7 +73,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 ############################
-# ENVIRONMENT AND WEB3 SETUP
+# WEB3 CONFIG
 ############################
 
 # Load environment variables
@@ -85,10 +84,9 @@ logger.info(f"Infura API key loaded: {bool(infura_api_key)}")
 # Initialize Web3 connections
 ETHEREUM_URL = ETHEREUM_URL_TEMPLATE.format(infura_api_key)
 w3_ethereum = Web3(Web3.HTTPProvider(ETHEREUM_URL))
-# w3_base removed
 
 ############################
-# TOKEN CONFIGURATION
+# TOKEN CONFIG
 ############################
 
 # Token decimals (consistent across networks)
@@ -97,7 +95,7 @@ TOKEN_DECIMALS = {
 }
 
 ############################
-# NETWORK CONFIGURATIONS
+# NETWORK CONFIG
 ############################
 
 NETWORK_CONFIGS = {
@@ -112,7 +110,7 @@ NETWORK_CONFIGS = {
            "LINK": w3_ethereum.to_checksum_address("0x514910771AF9Ca656af840dff83E8264EcF986CA"),  # LINK 
            "AAVE": w3_ethereum.to_checksum_address("0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9")   # AAVE
        },
-       "trade_pairs": [ # Reduced to specified pairs
+       "trade_pairs": [ 
            ("USDC", "ETH"), ("USDT", "ETH"),
            ("USDC", "WBTC"), ("USDT", "WBTC"),
            ("USDC", "LINK"), ("USDT", "LINK"), # 
@@ -122,12 +120,8 @@ NETWORK_CONFIGS = {
        "quoter_address": "0xb27308f9F90D607463bb33eA1BeBb41C27CE5AB6",
        "quoter_v2_address": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e"
    }
-   # "base" network configuration removed 
 }
 
-############################
-# GLOBAL STATE
-############################
 
 # ETH price cache to avoid excessive API calls
 eth_price_cache = {"price": None, "timestamp": None, "cache_duration": ETH_PRICE_CACHE_DURATION}
@@ -136,7 +130,7 @@ eth_price_cache = {"price": None, "timestamp": None, "cache_duration": ETH_PRICE
 csv_lock = threading.Lock()
 
 ################################
-# NETWORK CONNECTION VALIDATION
+# NETWORK CONNECTION
 ################################
 
 def  validate_network_connections ():
@@ -156,7 +150,7 @@ def  validate_network_connections ():
 validate_network_connections()
 
 ###############################
-# SIGNAL HANDLERS FOR SHUTDOWN
+# SHUTDOWN
 ###############################
 
 def  signal_handler (sig, frame):
@@ -298,7 +292,7 @@ def  initialize_network_contracts ():
 initialize_network_contracts()
 
 ############################
-# UTILITY FUNCTIONS # 
+# FUNCTIONS 
 ############################
 
 def  get_current_eth_price ():
@@ -379,10 +373,7 @@ def  detect_unreasonable_slippage (amount_in_small, amount_out_small, amount_in_
   
    return slippage_ratio > max_slippage_ratio
 
-############################
-# UNISWAP FUNCTIONS
-############################
-
+# Uniswap Functions
 def  find_best_pool_with_liquidity (token_in, token_out, amount_in, token_in_symbol, network="ethereum"):
    """
    Find the pool with the lowest fee tier that has sufficient liquidity based on slippage check
@@ -392,7 +383,6 @@ def  find_best_pool_with_liquidity (token_in, token_out, amount_in, token_in_sym
    factory_contract = config["factory"]
   
    decimals_in = TOKEN_DECIMALS[token_in_symbol]
-   # notional_amount = amount_in / (10 ** decimals_in) # This was for logging only, can be removed if not used
   
    logger.info(f"[{config['name']}] Looking for available pools for {token_in_symbol}")
   
@@ -403,8 +393,6 @@ def  find_best_pool_with_liquidity (token_in, token_out, amount_in, token_in_sym
            if pool_address != "0x0000000000000000000000000000000000000000":
                logger.info(f"[{config['name']}] Found pool with fee tier {fee/10000}% at {pool_address}") # 
               
-               # For all trades, do a basic existence check and return the first available pool
-               # The actual slippage validation will happen in get_uniswap_quote()
                try: # 
                    pool_contract = w3_instance.eth.contract(address=pool_address, abi=POOL_ABI)
                    total_liquidity = pool_contract.functions.liquidity().call()
@@ -518,8 +506,8 @@ def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_
            amount_out = None
            gas_estimate = 150000  # Default fallback 
           
-           # Use QuoterV2 if QuoterV1 is not available (e.g. on Base))
-           if quoter_v2_available and (not quoter_available or network == "base"): # network == "base" part is now moot
+           # Use QuoterV2 if QuoterV1 is not available
+           if quoter_v2_available and not quoter_available:
                # Create the path for QuoterV2
                fee_hex = current_fee_tier.to_bytes(3, byteorder='big').hex()
                path = token_in.replace('0x', '') + fee_hex + token_out.replace('0x', '') # 
@@ -604,7 +592,6 @@ def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_
                "amount_out": str(amount_out),
                "amount_out_decimals": str(receiving),
                "price": price,
-               "fee": "0", # MetaMask specific, set to 0 for Uniswap
                "interface_fee": interface_fee_amount, # 
                "gas_compute": str(gas_estimate),
                "gas_cost_eth": str(gas_cost_eth),
@@ -613,7 +600,6 @@ def  get_uniswap_quote (token_in_symbol, token_out_symbol, notional_amount, gas_
                "pool_address": pool_address if pool_address else "unknown",
                "fee_tier": current_fee_tier, # 
                "pool_fee": pool_fee_amount,
-               "fetch_time": "N/A", # MetaMask specific
                "slippage_percentage": str(slippage_percentage) if slippage_percentage is not None else "Missing"
            }
        except Exception as e: # 
@@ -643,10 +629,7 @@ def  fetch_uniswap_quote_data (token_a, token_b, notional, cached_gas_price, net
             logger.info(f"[{config['name']}] Uniswap: Quote received for {direction} with ${notional} USD")
    except Exception as e:
        # Error logging is handled within get_uniswap_quote if all tiers fail.
-       # This catch is for unexpected errors or if get_uniswap_quote re-raises.
-       # More specific logging from get_uniswap_quote should provide details.
-       logger.error(f"[{config['name']}] Uniswap: Error getting quote for {direction} with ${notional} USD in fetch_uniswap_quote_data: {e}") # , (adapted for uniswap only)
-       # No need to check for "No pools available" here as get_uniswap_quote handles that logging.
+       logger.error(f"[{config['name']}] Uniswap: Error getting quote for {direction} with ${notional} USD in fetch_uniswap_quote_data: {e}")
    return uniswap_quote
 
 
@@ -655,14 +638,12 @@ def  process_trading_pair (pair_data):
    Process a single trading pair with all its notional amounts
    """ # 
    token_a, token_b, config, network_key, cached_gas_price, cycle_timestamp = pair_data
-     # cached_eth_price removed as it was for MetaMask
   
    # Skip pairs where tokens don't exist on this network (should not happen with current setup)
    if token_a not in config["tokens"] or token_b not in config["tokens"]: # 
        logger.warning(f"[{config['name']}] Skipping {token_a}/{token_b} - tokens not available on this network")
        return
   
-   # PEPE specific logic removed as PEPE is not in the new trade pairs 
    notionals = USD_NOTIONALS # 
   
    for notional in notionals:
@@ -678,11 +659,9 @@ def  process_trading_pair (pair_data):
            logger.info(f"[{config['name']}] Uniswap: Quote written for {direction} with ${notional} USD")
        else: # (adapted)
            logger.warning(f"[{config['name']}] No Uniswap quote available for {direction} with ${notional} USD")
-      
-       # Base chain delay removed as Base network is removed 
 
 ############################
-# MAIN EXECUTION FUNCTIONS
+# MAIN FUNCTIONS
 ############################
 
 def  main ():
@@ -716,14 +695,10 @@ def  main ():
                    logger.error(f"[{config['name']}] Error fetching gas price: {e}")
                    cached_gas_price = None # Allow trades to proceed with on-demand gas price fetching
               
-               # ETH price is fetched by get_current_eth_price() which has its own caching 
-               # No need to pass cached_eth_price around for Uniswap only.
-              
                # Process trading pairs for this network
                if ENABLE_PARALLEL_PROCESSING:
                    pair_tasks = [] # 
                    for token_a, token_b in config["trade_pairs"]:
-                       # cached_eth_price removed from pair_data
                        pair_data = (token_a, token_b, config, network_key, cached_gas_price, now)
                        pair_tasks.append(pair_data) # 
                   
@@ -772,4 +747,4 @@ def  main ():
 if __name__ == "__main__":
    main()
 
-# caffeinate python3 /Users/{}}/Documents/crypto/uniswap_quotes.py
+# caffeinate python3 /Users/{}/Documents/crypto/uniswap_quotes.py
