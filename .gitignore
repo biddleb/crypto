@@ -127,3 +127,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Git Cheatsheet
+git-commands-cheatsheet.md
+git-cheatsheet.md
