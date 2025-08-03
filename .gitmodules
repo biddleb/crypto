@@ -1,3 +1,6 @@
 [submodule "eth-staking-rate"]
 	path = eth-staking-rate
 	url = https://github.com/gobitfly/eth.store
+[submodule "dune-api-client"]
+	path = dune-api-client
+	url = https://github.com/paradigmxyz/spice
